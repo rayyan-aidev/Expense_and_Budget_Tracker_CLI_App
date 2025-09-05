@@ -16,7 +16,7 @@ console_handler = logging.StreamHandler()
 
 # Set levels
 file_handler.setLevel(logging.INFO)
-console_handler.setLevel(logging.DEBUG)
+console_handler.setLevel(logging.WARNING)
 
 # Format
 formatter = logging.Formatter(
@@ -145,7 +145,28 @@ if __name__ == "__main__":
                 command = input(
                     "1.View all expenses\n2.Search expense by name\n3.Update expense\n4.Delete expense\n").strip()
                 if command == "1":
-                    Expense.list_expenses()
+                    expense_gen = Expense.list_expenses()
+                    expenses_found = False
+                    try:
+                        while True:
+                            expense_name = next(expense_gen)
+                            # Skip the budget_info entry
+                            if expense_name == "budget_info":
+                                continue
+                            expenses_found = True
+                            expense_data = Expense.load_expense(expense_name)
+                            if expense_data:
+                                print(f"\n{expense_name}: {expense_data}")
+                                user_input = input(
+                                    "\nPress Enter for next expense, 'q' to quit: ").lower()
+                                if user_input == 'q':
+                                    break
+                    except StopIteration:
+                        if expenses_found:
+                            print("\nEnd of expenses.")
+                        else:
+                            print("No expenses found.")
+                    logger.info("Listed all expenses")
                 elif command == "2":
                     name = input("Enter expense name to search: ").strip()
                     expense_data = Expense.load_expense(name)
@@ -197,4 +218,6 @@ if __name__ == "__main__":
                 break
             else:
                 print("Invalid choice. Please try again.")
+        print("Thank you for using the Expense Tracker.")
+        print("Invalid choice. Please try again.")
         print("Thank you for using the Expense Tracker.")

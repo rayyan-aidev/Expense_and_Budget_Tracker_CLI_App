@@ -12,7 +12,7 @@ console_handler = logging.StreamHandler()
 
 # Set levels
 file_handler.setLevel(logging.ERROR)
-console_handler.setLevel(logging.DEBUG)
+console_handler.setLevel(logging.INFO)
 # Format
 formatter = logging.Formatter(
     "%(asctime)s -%(name)s - %(levelname)s - %(message)s")

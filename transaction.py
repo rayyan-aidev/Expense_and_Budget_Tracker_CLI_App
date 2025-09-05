@@ -12,7 +12,7 @@ console_handler = logging.StreamHandler()
 
 # Set levels
 file_handler.setLevel(logging.INFO)
-console_handler.setLevel(logging.DEBUG)
+console_handler.setLevel(logging.WARNING)
 
 # Format
 formatter = logging.Formatter(
@@ -176,10 +176,8 @@ class Expense:
             if setup_file_path.exists():
                 with open(setup_file_path, "r") as file:
                     expenses = json.load(file)
-                    for expense_name, expense_data in expenses.items():
-                        if expense_name != "budget_info":
-                            yield f"{expense_name}: {expense_data}"
-                            logger.info("Listed all expenses")
+                for expense in expenses:
+                    yield expense
             else:
                 logger.warning("No expenses file found.")
                 return {}

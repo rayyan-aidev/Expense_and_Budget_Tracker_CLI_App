@@ -13,7 +13,7 @@ console_handler = logging.StreamHandler()
 
 # Set levels
 file_handler.setLevel(logging.INFO)
-console_handler.setLevel(logging.DEBUG)
+console_handler.setLevel(logging.WARNING)
 
 # Format
 formatter = logging.Formatter(
