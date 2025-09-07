@@ -58,13 +58,13 @@ class Report:
 
             # Determine the start date based on the time period
             end_date = datetime.now()
-            if self.time_period == "daily":
+            if self.time_period.lower() == "d":
                 start_date = end_date - timedelta(days=1)
-            elif self.time_period == "weekly":
+            elif self.time_period.lower() == "w":
                 start_date = end_date - timedelta(weeks=1)
-            elif self.time_period == "monthly":
+            elif self.time_period.lower() == "m":
                 start_date = end_date - timedelta(days=30)
-            elif self.time_period == "yearly":
+            elif self.time_period.lower() == "y":
                 start_date = end_date - timedelta(days=365)
             else:
                 logger.error("Invalid time period specified.")
@@ -97,7 +97,7 @@ class Report:
             logger.exception(f"Error generating report: {e}")
             return None
 
-    def detailed_generate_report(self):
+    def detailed_generate_report(self, no_save=False):
         try:
             with open(self.expenses_file_path, 'r') as f:
                 expenses_data = json.load(f)
@@ -148,9 +148,12 @@ class Report:
 
             logger.info(
                 f"Detailed report generated for {self.time_period} period.")
-            report_handler = BackgroundTasks(
-                BASE_DIR / f"detailed_report_{self.time_period}.json", "w")
-            report_handler.background_fileIO(detailed_report)
+            if not no_save:
+                report_handler = BackgroundTasks(
+                    BASE_DIR / f"detailed_report_{self.time_period}.json", "w")
+                report_handler.background_fileIO(detailed_report)
+
+            return detailed_report
 
         except Exception as e:
             logger.exception(f"Error generating detailed report: {e}")

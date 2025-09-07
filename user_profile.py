@@ -28,7 +28,7 @@ logger.addHandler(console_handler)
 
 def user_profile():
     BASE_DIR = Path(__file__).resolve().parent
-    file_path = BASE_DIR / "user_profile.json"
+    file_path = BASE_DIR / "user_details.json"
     if os.path.exists(file_path):
         try:
             with open(file_path, "r") as file:

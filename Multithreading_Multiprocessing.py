@@ -29,6 +29,22 @@ logger.addHandler(console_handler)
 BASE_DIR = Path(__file__).resolve().parent
 
 
+def process_report(time_period, category, report_type, result_queue):
+    """Standalone function for report processing"""
+    try:
+        from report import Report
+        report_obj = Report(time_period, category)
+        if report_type == "brief":
+            result = report_obj.brief_generate_report()
+        else:
+            result = report_obj.detailed_generate_report(
+                no_save=True)  # Pass no_save=True
+        result_queue.put((report_type, result))
+    except Exception as e:
+        logger.error(f"Error generating {report_type} report: {e}")
+        result_queue.put((report_type, None))
+
+
 class BackgroundTasks:
     def __init__(self, file_path=None, mode=None):
         self.file_path = file_path
@@ -76,24 +92,19 @@ class BackgroundTasks:
             logger.error("Invalid mode. Use 'r' for read or 'w' for write.")
             return None
 
-    def process_report(self, report_obj, report_type, result_queue):
-        try:
-            if report_type == "brief":
-                result = report_obj.brief_generate_report()
-            else:
-                result = report_obj.detailed_generate_report()
-            result_queue.put((report_type, result))
-        except Exception as e:
-            logger.error(f"Error generating {report_type} report: {e}")
-            result_queue.put((report_type, None))
-
     def generate_reports(self, report_obj):
         try:
             # Create processes for both report types
-            brief_process = Process(target=self.process_report,
-                                    args=(report_obj, "brief", self.result_queue))
-            detailed_process = Process(target=self.process_report,
-                                       args=(report_obj, "detailed", self.result_queue))
+            brief_process = Process(
+                target=process_report,
+                args=(report_obj.time_period, report_obj.category,
+                      "brief", self.result_queue)
+            )
+            detailed_process = Process(
+                target=process_report,
+                args=(report_obj.time_period, report_obj.category,
+                      "detailed", self.result_queue)
+            )
 
             # Start processes
             brief_process.start()
@@ -108,6 +119,14 @@ class BackgroundTasks:
             while not self.result_queue.empty():
                 report_type, report_data = self.result_queue.get()
                 results[report_type] = report_data
+
+            # Save detailed report in the main process
+            if results.get("detailed"):
+                report_handler = BackgroundTasks(
+                    BASE_DIR /
+                    f"detailed_report_{report_obj.time_period}.json", "w"
+                )
+                report_handler.background_fileIO(results["detailed"])
 
             return results
         except Exception as e:
