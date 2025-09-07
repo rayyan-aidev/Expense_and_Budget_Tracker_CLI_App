@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import json
 from pathlib import Path
 import logging
+from logging.handlers import RotatingFileHandler
 import time
 from login import login_screen
 from setup import Setup
@@ -10,34 +11,60 @@ from report import Report
 from Multithreading_Multiprocessing import BackgroundTasks
 from user_profile import user_profile
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# Shared logger for system-wide errors (configured once)
+shared_logger = None
 
-# Create handler (file + console)
-file_handler = logging.FileHandler("tracker.log")
-console_handler = logging.StreamHandler()
 
-# Set levels
-file_handler.setLevel(logging.INFO)
-console_handler.setLevel(logging.WARNING)
+def setup_logging(username):
+    global shared_logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    user_dir = BASE_DIR / "users" / username
+    user_dir.mkdir(parents=True, exist_ok=True)
 
-# Format
-formatter = logging.Formatter(
-    "%(asctime)s -%(name)s - %(levelname)s - %(message)s")
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
+    # User-specific log with rotation
+    file_handler = RotatingFileHandler(
+        user_dir / "tracker.log", maxBytes=5*1024*1024, backupCount=3
+    )
+    console_handler = logging.StreamHandler()
+    file_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.WARNING)
+    formatter = logging.Formatter(
+        "%(asctime)s -%(name)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
 
-# Add handlers
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
+    # Configure shared logger for ERROR and CRITICAL (only once)
+    if shared_logger is None:
+        shared_logger = logging.getLogger('shared')
+        shared_logger.setLevel(logging.ERROR)
+        shared_file_handler = RotatingFileHandler(
+            BASE_DIR / "tracker.log", maxBytes=10*1024*1024, backupCount=5
+        )
+        shared_file_handler.setFormatter(formatter)
+        shared_logger.handlers = [shared_file_handler]
+
+    # Clear existing handlers to avoid duplicates
+    logger.handlers = []
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    # Add shared handler for ERROR/CRITICAL
+    logger.addHandler(shared_logger.handlers[0])
+    return logger
+
+
+BASE_DIR = Path(__file__).resolve().parent
 
 if __name__ == "__main__":
     login_successful, username = login_screen()
 
     if login_successful:
-        BASE_DIR = Path(__file__).resolve().parent
-        # File path
-        user_profile_path = BASE_DIR / "user_details.json"
+        logger = setup_logging(username)
+        # User-specific directory
+        user_dir = BASE_DIR / "users" / username
+        user_dir.mkdir(parents=True, exist_ok=True)
+        # File path with user-specific directory
+        user_profile_path = user_dir / "user_details.json"
         today = datetime.now().date()
         try:
             with open(user_profile_path, "r") as file:
@@ -109,7 +136,7 @@ if __name__ == "__main__":
                     income = float(input("Enter your income: ").strip())
                     default_currency, income_currency = get_currency()
                     setup = Setup(budget, income,
-                                  default_currency, income_currency)
+                                  default_currency, income_currency, username)
                     converted_income = setup.convert_income()
                     if converted_income:
                         setup.set_budget(converted_income)
@@ -133,9 +160,9 @@ if __name__ == "__main__":
                     description = input(
                         "Enter expense description (optional): ").strip().capitalize()
                     expense = Expense(
-                        name, amount, category, date, description)
+                        name, amount, category, date, description, username)
                     expense.add_expense()
-                    remaining_budget = expense.check_budget()
+                    remaining_budget = expense.check_budget(username)
                     if remaining_budget is not None:
                         print(
                             f"Expense added successfully. Remaining budget: {remaining_budget}")
@@ -150,16 +177,16 @@ if __name__ == "__main__":
                 command = input(
                     "1.View all expenses\n2.Search expense by name\n3.Update expense\n4.Delete expense\n").strip()
                 if command == "1":
-                    expense_gen = Expense.list_expenses()
+                    expense_gen = Expense.list_expenses(username)
                     expenses_found = False
                     try:
                         while True:
                             expense_name = next(expense_gen)
-                            # Skip the budget_info entry
                             if expense_name == "budget_info":
                                 continue
                             expenses_found = True
-                            expense_data = Expense.load_expense(expense_name)
+                            expense_data = Expense.load_expense(
+                                expense_name, username)
                             if expense_data:
                                 print(f"\n{expense_name}: {expense_data}")
                                 user_input = input(
@@ -175,7 +202,7 @@ if __name__ == "__main__":
                 elif command == "2":
                     name = input("Enter expense name to search: ").strip().replace(
                         " ", "_").title()
-                    expense_data = Expense.load_expense(name)
+                    expense_data = Expense.load_expense(name, username)
                     if expense_data:
                         print(f"Expense found: {expense_data}")
                     else:
@@ -207,14 +234,14 @@ if __name__ == "__main__":
                     if new_description:
                         update_fields["description"] = new_description
                     if update_fields:
-                        Expense.update_expense(name, **update_fields)
+                        Expense.update_expense(name, username, **update_fields)
                         print("Expense updated successfully.")
                     else:
                         print("No updates provided.")
                 elif command == "4":
                     name = input("Enter expense name to delete: ").strip().replace(
                         " ", "_").title()
-                    Expense.delete_expense(name)
+                    Expense.delete_expense(name, username)
                     print("Expense deleted successfully.")
                 else:
                     print("Invalid command.")
@@ -224,7 +251,7 @@ if __name__ == "__main__":
                 category = input(
                     "Enter category for report (leave blank for all categories): ").strip() or None
 
-                report = Report(time_period, category)
+                report = Report(time_period, category, username)
                 background_task = BackgroundTasks()
                 print("Generating reports in background...")
 
@@ -239,13 +266,11 @@ if __name__ == "__main__":
                 else:
                     print("Failed to generate reports.")
             elif choice == "5":
-                user_profile()
+                user_profile(username)
             elif choice == "6":
                 print("Exiting the application. Goodbye!")
                 time.sleep(0.3)
                 break
             else:
                 print("Invalid choice. Please try again.")
-        print("Thank you for using the Expense Tracker.")
-        print("Invalid choice. Please try again.")
         print("Thank you for using the Expense Tracker.")

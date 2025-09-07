@@ -1,45 +1,70 @@
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from Multithreading_Multiprocessing import BackgroundTasks
 from datetime import datetime, timedelta
 import json
 import time
 
+# Shared logger for system-wide errors (configured once)
+shared_logger = None
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
-# Create handler (file + console)
-file_handler = logging.FileHandler("tracker.log")
-console_handler = logging.StreamHandler()
+def setup_logging(username):
+    global shared_logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    user_dir = BASE_DIR / "users" / username
+    user_dir.mkdir(parents=True, exist_ok=True)
 
-# Set levels
-file_handler.setLevel(logging.INFO)
-console_handler.setLevel(logging.WARNING)
+    # User-specific log with rotation
+    file_handler = RotatingFileHandler(
+        user_dir / "tracker.log", maxBytes=5*1024*1024, backupCount=3
+    )
+    console_handler = logging.StreamHandler()
+    file_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.WARNING)
+    formatter = logging.Formatter(
+        "%(asctime)s -%(name)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
 
-# Format
-formatter = logging.Formatter(
-    "%(asctime)s -%(name)s - %(levelname)s - %(message)s")
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
+    # Configure shared logger for ERROR and CRITICAL (only once)
+    if shared_logger is None:
+        shared_logger = logging.getLogger('shared')
+        shared_logger.setLevel(logging.ERROR)
+        shared_file_handler = RotatingFileHandler(
+            BASE_DIR / "tracker.log", maxBytes=10*1024*1024, backupCount=5
+        )
+        shared_file_handler.setFormatter(formatter)
+        shared_logger.handlers = [shared_file_handler]
 
-# Add handlers
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
+    # Clear existing handlers to avoid duplicates
+    logger.handlers = []
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    # Add shared handler for ERROR/CRITICAL
+    logger.addHandler(shared_logger.handlers[0])
+    return logger
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
 
 class Report:
-    def __init__(self, time_period, category=None):
+    def __init__(self, time_period, category=None, username=None):
         self.time_period = time_period
         self.category = category
+        self.username = username
+        self.logger = setup_logging(username)
         self._initialize_paths()
 
     def _initialize_paths(self):
-        self.expenses_file_path = BASE_DIR / "expenses.json"
-        self.setup_file_path = BASE_DIR / "setup.json"
-        self.detailed_report_path = BASE_DIR / \
+        user_dir = BASE_DIR / "users" / self.username
+        user_dir.mkdir(parents=True, exist_ok=True)
+        self.expenses_file_path = user_dir / "expenses.json"
+        self.setup_file_path = user_dir / "setup.json"
+        self.detailed_report_path = user_dir / \
             f"detailed_report_{self.time_period}.json"
 
     def brief_generate_report(self):
@@ -49,11 +74,11 @@ class Report:
             with open(self.setup_file_path, 'r') as f:
                 setup_data = json.load(f)
             if not expenses_data:
-                logger.warning("No expenses data found.")
+                self.logger.warning("No expenses data found.")
                 return None
 
             if not setup_data:
-                logger.warning("No setup data found.")
+                self.logger.warning("No setup data found.")
                 return None
 
             # Determine the start date based on the time period
@@ -67,7 +92,7 @@ class Report:
             elif self.time_period.lower() == "y":
                 start_date = end_date - timedelta(days=365)
             else:
-                logger.error("Invalid time period specified.")
+                self.logger.error("Invalid time period specified.")
                 return None
 
             # Filter expenses based on date and category
@@ -90,11 +115,12 @@ class Report:
                 "expenses": filtered_expenses
             }
 
-            logger.info(f"Report generated for {self.time_period} period.")
+            self.logger.info(
+                f"Report generated for {self.time_period} period.")
             return brief_report
 
         except Exception as e:
-            logger.exception(f"Error generating report: {e}")
+            self.logger.exception(f"Error generating report: {e}")
             return None
 
     def detailed_generate_report(self, no_save=False):
@@ -104,11 +130,11 @@ class Report:
             with open(self.setup_file_path, 'r') as f:
                 setup_data = json.load(f)
             if not expenses_data:
-                logger.warning("No expenses data found.")
+                self.logger.warning("No expenses data found.")
                 return None
 
             if not setup_data:
-                logger.warning("No setup data found.")
+                self.logger.warning("No setup data found.")
                 return None
 
             # Determine the start date based on the time period
@@ -122,7 +148,7 @@ class Report:
             elif self.time_period.lower() == "y":
                 start_date = end_date - timedelta(days=365)
             else:
-                logger.error("Invalid time period specified.")
+                self.logger.error("Invalid time period specified.")
                 return None
 
             # Filter expenses based on date and category
@@ -146,15 +172,15 @@ class Report:
                 "budget_info": expenses_data.get("budget_info", {})
             }
 
-            logger.info(
+            self.logger.info(
                 f"Detailed report generated for {self.time_period} period.")
             if not no_save:
                 report_handler = BackgroundTasks(
-                    BASE_DIR / f"detailed_report_{self.time_period}.json", "w")
+                    self.detailed_report_path, "w")
                 report_handler.background_fileIO(detailed_report)
 
             return detailed_report
 
         except Exception as e:
-            logger.exception(f"Error generating detailed report: {e}")
+            self.logger.exception(f"Error generating detailed report: {e}")
             return None
