@@ -6,6 +6,9 @@ import time
 from login import login_screen
 from setup import Setup
 from transaction import Expense
+from report import Report
+from Multithreading_Multiprocessing import BackgroundTasks
+from user_profile import user_profile
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -118,15 +121,17 @@ if __name__ == "__main__":
                         "Invalid input. Please enter numeric values for budget and income.")
                     logger.exception("Invalid input during setup.")
             elif choice == "2":
-                name = input("Enter expense name: ").strip()
+                name = input("Enter expense name: ").strip(
+                ).title().replace(" ", "_")
                 try:
                     amount = float(input("Enter expense amount: ").strip())
-                    category = input("Enter expense category: ").strip()
+                    category = input(
+                        "Enter expense category: ").strip().title().replace(" ", "_")
                     date_input = input(
                         "Enter expense date (DD-MM-YYYY) or leave blank for today: ").strip()
                     date = date_input if date_input else None
                     description = input(
-                        "Enter expense description (optional): ").strip()
+                        "Enter expense description (optional): ").strip().capitalize()
                     expense = Expense(
                         name, amount, category, date, description)
                     expense.add_expense()
@@ -168,17 +173,21 @@ if __name__ == "__main__":
                             print("No expenses found.")
                     logger.info("Listed all expenses")
                 elif command == "2":
-                    name = input("Enter expense name to search: ").strip()
+                    name = input("Enter expense name to search: ").strip().replace(
+                        " ", "_").title()
                     expense_data = Expense.load_expense(name)
                     if expense_data:
                         print(f"Expense found: {expense_data}")
                     else:
                         print("Expense not found.")
                 elif command == "3":
-                    name = input("Enter expense name to update: ").strip()
+                    name = input("Enter expense name to update: ").strip().replace(
+                        " ", "_").title()
                     print("Enter new values (leave blank to keep current value):")
                     new_amount = input("New amount: ").strip()
                     new_category = input("New category: ").strip()
+                    if new_category is not None and not new_category.isalpha():
+                        new_category = new_category.title()
                     new_date = input("New date (DD-MM-YYYY): ").strip()
                     new_description = input(
                         "New description (optional): ").strip()
@@ -203,15 +212,34 @@ if __name__ == "__main__":
                     else:
                         print("No updates provided.")
                 elif command == "4":
-                    name = input("Enter expense name to delete: ").strip()
+                    name = input("Enter expense name to delete: ").strip().replace(
+                        " ", "_").title()
                     Expense.delete_expense(name)
                     print("Expense deleted successfully.")
                 else:
                     print("Invalid command.")
             elif choice == "4":
-                pass
+                time_period = input(
+                    "Enter time period for report ([d]aily, [w]eekly, [m]onthly, [y]early): ").strip().lower()
+                category = input(
+                    "Enter category for report (leave blank for all categories): ").strip() or None
+
+                report = Report(time_period, category)
+                background_task = BackgroundTasks()
+                print("Generating reports in background...")
+
+                results = background_task.generate_reports(report)
+                if results:
+                    if results.get("brief"):
+                        print("\nBrief Report:")
+                        for key, value in results["brief"].items():
+                            print(f"  {key}: {value}")
+                    if results.get("detailed"):
+                        print("\nDetailed report has been saved to file.")
+                else:
+                    print("Failed to generate reports.")
             elif choice == "5":
-                pass
+                user_profile()
             elif choice == "6":
                 print("Exiting the application. Goodbye!")
                 time.sleep(0.3)

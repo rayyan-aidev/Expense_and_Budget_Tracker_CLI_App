@@ -210,6 +210,7 @@ def login_screen():
                             continue
                     else:
                         print("User not registered. Try signing up.")
+                        continue
                     if bcrypt.checkpw(typed_password.encode(), password.encode()):
                         print("Login successful.\n\n")
                         time.sleep(1)

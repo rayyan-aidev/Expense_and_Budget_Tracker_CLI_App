@@ -1,5 +1,5 @@
 from threading import Thread, Event
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -30,11 +30,12 @@ BASE_DIR = Path(__file__).resolve().parent
 
 
 class BackgroundTasks:
-    def __init__(self, file_path, mode):
+    def __init__(self, file_path=None, mode=None):
         self.file_path = file_path
         self.mode = mode
         self.data = None
         self.event = Event()
+        self.result_queue = Queue()
 
     def save_to_file(self, data):
         try:
@@ -73,4 +74,42 @@ class BackgroundTasks:
             return self.data
         else:
             logger.error("Invalid mode. Use 'r' for read or 'w' for write.")
+            return None
+
+    def process_report(self, report_obj, report_type, result_queue):
+        try:
+            if report_type == "brief":
+                result = report_obj.brief_generate_report()
+            else:
+                result = report_obj.detailed_generate_report()
+            result_queue.put((report_type, result))
+        except Exception as e:
+            logger.error(f"Error generating {report_type} report: {e}")
+            result_queue.put((report_type, None))
+
+    def generate_reports(self, report_obj):
+        try:
+            # Create processes for both report types
+            brief_process = Process(target=self.process_report,
+                                    args=(report_obj, "brief", self.result_queue))
+            detailed_process = Process(target=self.process_report,
+                                       args=(report_obj, "detailed", self.result_queue))
+
+            # Start processes
+            brief_process.start()
+            detailed_process.start()
+
+            # Wait for processes to complete (with timeout)
+            brief_process.join(timeout=10)
+            detailed_process.join(timeout=10)
+
+            # Collect results
+            results = {}
+            while not self.result_queue.empty():
+                report_type, report_data = self.result_queue.get()
+                results[report_type] = report_data
+
+            return results
+        except Exception as e:
+            logger.error(f"Error in report generation: {e}")
             return None
