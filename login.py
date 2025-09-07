@@ -216,7 +216,7 @@ def login_screen():
                         return True, username
                     else:
                         print("Password doesn't match")
-            elif action == "4":
+            elif action == "3":
                 if not os.path.exists(file_path):
                     print("No users registered yet.")
                     continue

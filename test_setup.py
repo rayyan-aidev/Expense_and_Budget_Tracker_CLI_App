@@ -16,12 +16,12 @@ def test_convert_income(setup_instance):
     assert converted_income != setup_instance.income  # Should be converted
 
 
-def test_set_budget(tmp_path, setup_instance):
+def test_set_budget(setup_instance):
     converted_income = setup_instance.convert_income()
     assert converted_income is not None
     setup_instance.set_budget(converted_income)
 
-    setup_file_path = tmp_path / "setup.json"
+    setup_file_path = "setup.json"
     with open(setup_file_path, "r") as file:
         data = json.load(file)
 

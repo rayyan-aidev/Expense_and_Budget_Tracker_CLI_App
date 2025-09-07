@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 import json
 import logging
 from pathlib import Path
+from Multithreading_Multiprocessing import BackgroundTasks
+import time
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -47,31 +49,31 @@ class Expense:
 
     def set_budget(self):
         try:
-            with open(BASE_DIR / "setup.json", "r") as file:
-                setup_data = json.load(file)
-                initial_budget = setup_data.get("budget", 0)
-                income = setup_data.get("income", 0)
+            setup = BackgroundTasks(BASE_DIR/"setup.json", "r")
+            setup_data = setup.background_fileIO()
+            initial_budget = setup_data.get("budget", 0)
+            income = setup_data.get("income", 0)
 
             # Load or create expenses file
             if setup_file_path.exists():
-                with open(setup_file_path, "r") as file:
-                    expenses = json.load(file)
+                expenses = BackgroundTasks(setup_file_path, "r")
+                expenses_data = expenses.background_fileIO()
             else:
-                expenses = {}
+                expenses_data = {}
 
             current_month = datetime.now().strftime("%Y-%m")
 
             # Check if we need to reset monthly budget
-            if "budget_info" not in expenses or expenses["budget_info"].get("month") != current_month:
-                expenses["budget_info"] = {
+            if "budget_info" not in expenses_data or expenses_data["budget_info"].get("month") != current_month:
+                expenses_data["budget_info"] = {
                     "month": current_month,
                     "initial_budget": initial_budget,
                     "current_budget": initial_budget,
                     "income": income
                 }
 
-                with open(setup_file_path, "w") as file:
-                    json.dump(expenses, file, indent=4)
+                expenses = BackgroundTasks(setup_file_path, "w")
+                expenses.background_fileIO(expenses_data)
                 logger.info(f"Monthly budget reset to: {initial_budget}")
         except Exception as e:
             logger.exception(f"Failed to set budget: {e}")
@@ -79,17 +81,19 @@ class Expense:
 
     def add_expense(self):
         try:
-            if setup_file_path.exists():
-                with open(setup_file_path, "r") as file:
-                    expenses = json.load(file)
-            else:
+            expenses_reader = BackgroundTasks(setup_file_path, "r")
+            expenses = expenses_reader.background_fileIO() if setup_file_path.exists() else {}
+            if expenses is None:
                 expenses = {}
 
             # Initialize budget if not exists
             if "budget_info" not in expenses:
                 self.set_budget()
-                with open(setup_file_path, "r") as file:
-                    expenses = json.load(file)
+                time.sleep(0.4)
+                expenses_reader = BackgroundTasks(setup_file_path, "r")
+                expenses = expenses_reader.background_fileIO()
+                if expenses is None:
+                    raise Exception("Failed to read expenses file")
 
             # Update current budget
             current_budget = expenses["budget_info"]["current_budget"]
@@ -99,8 +103,8 @@ class Expense:
             expense = self.to_dict()
             expenses[self.name] = expense
 
-            with open(setup_file_path, "w") as file:
-                json.dump(expenses, file, indent=4)
+            expenses_handler = BackgroundTasks(setup_file_path, "w")
+            expenses_handler.background_fileIO(expenses)
 
             logger.info(f"Expense saved and budget updated: {self.to_dict()}")
         except Exception as e:
@@ -110,9 +114,10 @@ class Expense:
     def load_expense(cls, expense_name):
         try:
             if setup_file_path.exists():
-                with open(setup_file_path, "r") as file:
-                    expenses = json.load(file)
-                    expense_data = expenses.get(expense_name)
+                expenses = BackgroundTasks(setup_file_path, "r")
+                expenses_data = expenses.background_fileIO()
+                if expenses_data:
+                    expense_data = expenses_data.get(expense_name)
                     if expense_data:
                         logger.info(f"Expense loaded: {expense_data}")
                         return expense_data
@@ -134,10 +139,15 @@ class Expense:
                 with open(setup_file_path, "r") as file:
                     expenses = json.load(file)
 
-                if expense_name in expenses:
+                if expense_name in expenses and expense_name != "budget_info":
+                    # Get the expense amount before deleting
+                    deleted_amount = expenses[expense_name]["amount"]
+                    # Update current budget by adding back the deleted expense amount
+                    expenses["budget_info"]["current_budget"] += deleted_amount
+                    # Delete the expense
                     del expenses[expense_name]
-                    with open(setup_file_path, "w") as file:
-                        json.dump(expenses, file, indent=4)
+                    expenses_handler = BackgroundTasks(setup_file_path, "w")
+                    expenses_handler.background_fileIO(expenses)
                     logger.info(f"Expense deleted: {expense_name}")
                 else:
                     logger.warning(
@@ -150,23 +160,33 @@ class Expense:
     @classmethod
     def update_expense(cls, expense_name, **kwargs):
         try:
-            if setup_file_path.exists():
-                with open(setup_file_path, "r") as file:
-                    expenses = json.load(file)
+            expenses_reader = BackgroundTasks(setup_file_path, "r")
+            expenses = expenses_reader.background_fileIO() if setup_file_path.exists() else None
+            if expenses is None:
+                logger.error("Failed to read expenses file")
+                return
 
-                if expense_name in expenses:
-                    for key, value in kwargs.items():
-                        if key in expenses[expense_name]:
-                            expenses[expense_name][key] = value
-                    with open(setup_file_path, "w") as file:
-                        json.dump(expenses, file, indent=4)
-                    logger.info(
-                        f"Expense updated: {expense_name} with {kwargs}")
-                else:
-                    logger.warning(
-                        f"No expense found with name: {expense_name}")
+            if expense_name in expenses:
+                old_amount = expenses[expense_name].get("amount", 0)
+                new_amount = kwargs.get("amount", old_amount)
+
+                # Update budget if amount changed
+                if "amount" in kwargs:
+                    expenses["budget_info"]["current_budget"] += (
+                        old_amount - new_amount)
+
+                # Update expense fields
+                for key, value in kwargs.items():
+                    if key in expenses[expense_name]:
+                        expenses[expense_name][key] = value
+
+                expenses_handler = BackgroundTasks(setup_file_path, "w")
+                if not expenses_handler.background_fileIO(expenses):
+                    logger.error("Failed to save updated expenses")
+                    return
+                logger.info(f"Expense updated: {expense_name} with {kwargs}")
             else:
-                logger.warning("No expenses file found.")
+                logger.warning(f"No expense found with name: {expense_name}")
         except Exception as e:
             logger.error(f"Failed to update expense: {e}")
 
