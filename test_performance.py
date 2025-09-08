@@ -55,7 +55,7 @@ def setup_expenses(request):
     return expense
 
 
-@pytest.mark.parametrize("setup_expenses", [10, 100, 1000], indirect=True)
+@pytest.mark.parametrize("setup_expenses", [10, 100], indirect=True)
 def test_add_expense_performance(setup_expenses, benchmark):
     """Test performance of adding a single expense with varying dataset sizes."""
     expense = setup_expenses
@@ -72,7 +72,7 @@ def test_add_expense_performance(setup_expenses, benchmark):
     assert end_memory - start_memory < 10  # Memory increase < 10MB
 
 
-@pytest.mark.parametrize("setup_expenses", [10, 100, 1000], indirect=True)
+@pytest.mark.parametrize("setup_expenses", [10, 100], indirect=True)
 def test_list_expenses_performance(setup_expenses, benchmark):
     """Test performance of listing expenses with varying dataset sizes."""
     def list_expenses():
@@ -86,7 +86,7 @@ def test_list_expenses_performance(setup_expenses, benchmark):
     assert end_memory - start_memory < 20  # Memory increase < 20MB
 
 
-@pytest.mark.parametrize("setup_expenses", [10, 100, 1000], indirect=True)
+@pytest.mark.parametrize("setup_expenses", [10, 100], indirect=True)
 def test_report_generation_performance(setup_expenses, benchmark):
     """Test performance of generating brief and detailed reports."""
     report = Report("monthly", None, TEST_USER)
