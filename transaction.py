@@ -120,7 +120,6 @@ class Expense:
                 # Initialize budget if not exists
                 if "budget_info" not in expenses:
                     self.set_budget()
-                    time.sleep(0.4)
                     expenses_reader = BackgroundTasks(
                         self.setup_file_path, "r")
                     expenses = expenses_reader.background_fileIO()
