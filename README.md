@@ -116,7 +116,7 @@ pip install -r requirements.txt
 ```
 3. Set Up API Key
 Create a .env file in the project root:
-API_KEY=your_api_key_here
+- API_KEY=your_api_key_here
 4. Run the Application
 ```bash
 python main.py
@@ -178,8 +178,8 @@ git commit -m "Add your feature"
 ## 📬 Contact
 
 For questions or suggestions:
-📧 Email: rayyanaqeel1310@gmail.com
-💬 Or open a GitHub Issue
+- 📧 Email: rayyanaqeel1310@gmail.com
+- 💬 Or open a GitHub Issue
 
 ## 📄 License
 
