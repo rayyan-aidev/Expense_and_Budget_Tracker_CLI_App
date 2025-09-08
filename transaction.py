@@ -5,9 +5,12 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from Multithreading_Multiprocessing import BackgroundTasks
 import time
+from threading import Lock
+
 
 # Shared logger for system-wide errors (configured once)
 shared_logger = None
+file_lock = Lock()
 
 
 def setup_logging(username):
@@ -107,34 +110,36 @@ class Expense:
 
     def add_expense(self):
         try:
-            expenses_reader = BackgroundTasks(self.setup_file_path, "r")
-            expenses = expenses_reader.background_fileIO(
-            ) if self.setup_file_path.exists() else {}
-            if expenses is None:
-                expenses = {}
-
-            # Initialize budget if not exists
-            if "budget_info" not in expenses:
-                self.set_budget()
-                time.sleep(0.4)
+            with file_lock:
                 expenses_reader = BackgroundTasks(self.setup_file_path, "r")
-                expenses = expenses_reader.background_fileIO()
+                expenses = expenses_reader.background_fileIO(
+                ) if self.setup_file_path.exists() else {}
                 if expenses is None:
-                    raise Exception("Failed to read expenses file")
+                    expenses = {}
 
-            # Update current budget
-            current_budget = expenses["budget_info"]["current_budget"]
-            expenses["budget_info"]["current_budget"] = current_budget - self.amount
+                # Initialize budget if not exists
+                if "budget_info" not in expenses:
+                    self.set_budget()
+                    time.sleep(0.4)
+                    expenses_reader = BackgroundTasks(
+                        self.setup_file_path, "r")
+                    expenses = expenses_reader.background_fileIO()
+                    if expenses is None:
+                        raise Exception("Failed to read expenses file")
 
-            # Save expense
-            expense = self.to_dict()
-            expenses[self.name] = expense
+                # Update current budget
+                current_budget = expenses["budget_info"]["current_budget"]
+                expenses["budget_info"]["current_budget"] = current_budget - self.amount
 
-            expenses_handler = BackgroundTasks(self.setup_file_path, "w")
-            expenses_handler.background_fileIO(expenses)
+                # Save expense
+                expense = self.to_dict()
+                expenses[self.name] = expense
 
-            self.logger.info(
-                f"Expense saved and budget updated: {self.to_dict()}")
+                expenses_handler = BackgroundTasks(self.setup_file_path, "w")
+                expenses_handler.background_fileIO(expenses)
+
+                self.logger.info(
+                    f"Expense saved and budget updated: {self.to_dict()}")
         except Exception as e:
             self.logger.exception(f"Failed to save expense: {e}")
 
